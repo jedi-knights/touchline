@@ -37,12 +37,13 @@ Sub(#11 off, #12 on) → Half Time → Second Half → Full Time → /matches/[i
 
 ## Architecture
 
-Touchline runs four long-running services behind a single host port:
+Touchline runs five long-running services behind a single host port:
 
 ```
 browser → gateway:8080 (host :3000, rate-limited)
               → app:3000 (Next.js, internal)
                   ├→ identity-service:8081 (credential validation, internal)
+                  ├→ match-engine:8082 (event state machine, internal)
                   └→ postgres:5432 (touchline + identity_service DBs, internal)
 ```
 
@@ -50,6 +51,10 @@ Two Go services from [identity-platform-go][platform] are **vendored** under `se
 
 - **identity-service** (`services/identity/`) — owns user records and bcrypt password hashes; the Next.js Auth.js Credentials provider calls it on sign-in / sign-up.
 - **api-gateway** (`services/gateway/`) — front-door reverse proxy. Today it enforces **rate limiting** (token bucket, 100 rps / burst 200, keyed by source IP). Auth, CORS, compression, retry, cache, and circuit-break are all off on purpose — see `init/gateway/gateway.yaml` for the rationale per setting.
+
+A third Go service is **authored here** under `services/`:
+
+- **match-engine** (`services/match-engine/`) — the match event state machine. Touchline's Server Actions delegate `recordEventAction` and `recordSubstitutionAction` to it; the service derives the match clock, transitions setup → live → finished, opens/closes player stints, and applies score deltas (including the OWN_GOAL flip rule). Tenant scoping (`assertOwnsMatch`) stays in Next.js — the engine trusts its caller, the same way a domain layer trusts its host.
 
 [platform]: https://github.com/jedi-knights/identity-platform-go
 

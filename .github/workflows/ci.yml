@@ -32,31 +32,33 @@ jobs:
       - run: npm test
       - run: npm run build
 
-  vendored-go:
-    # Verifies the vendored tree still builds. We deliberately don't run
-    # upstream tests here — they're identity-platform-go's CI concern. What
-    # matters for touchline is that the vendored snapshot produces a working
-    # image. `docker buildx build --check` catches Dockerfile regressions
-    # before they hit the e2e job below.
-    name: Vendored ${{ matrix.service }} — image build check
+  go-services:
+    # Verifies every Go service image still builds. For the vendored services
+    # (identity, gateway) we deliberately don't run upstream tests — that's
+    # identity-platform-go's CI concern. match-engine is authored here, so
+    # its unit tests run inside the build via go test. What matters for
+    # touchline is that each service produces a working image.
+    name: Go service ${{ matrix.service }} — image build check
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - service: identity
-            build_arg: identity-service
+            build_args: --build-arg SERVICE_NAME=identity-service
           - service: gateway
-            build_arg: api-gateway
+            build_args: --build-arg SERVICE_NAME=api-gateway
+          - service: match-engine
+            build_args: ''
     steps:
       - uses: actions/checkout@v4
-      - name: Build services/${{ matrix.service }} → ${{ matrix.build_arg }}
+      - name: Build services/${{ matrix.service }}
         # Plain `docker build` (no buildx setup): the CI runner already has
         # docker installed, and buildx's BuildKit + --load combo was failing
         # to see go.work in the build context.
         run: |
           docker build \
-            --build-arg SERVICE_NAME=${{ matrix.build_arg }} \
+            ${{ matrix.build_args }} \
             --tag touchline-${{ matrix.service }}:ci \
             services/${{ matrix.service }}
 
