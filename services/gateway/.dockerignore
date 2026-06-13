@@ -1,0 +1,7 @@
+# Build context limits for `docker build services/gateway`.
+# The Dockerfile COPYs go.work + libs/ + services/ only.
+
+**/*.md
+**/CLAUDE.md
+**/testdata
+**/.cache
