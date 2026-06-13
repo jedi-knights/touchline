@@ -135,10 +135,27 @@ test('happy path: sign up → setup → play → summary', async ({ page }) => {
 
   // Minutes table is present.
   await expect(page.getByRole('heading', { name: 'Minutes played' })).toBeVisible();
-
-  // Player 1 was on the whole match — should appear in the table.
-  await expect(page.getByRole('cell', { name: 'E2E Player 1', exact: true })).toBeVisible();
+  // Scope the cell lookups to the minutes table — the box-score table also
+  // surfaces player names, which would make a global `getByRole('cell')`
+  // ambiguous in strict mode.
+  const minutesTable = page
+    .getByRole('heading', { name: 'Minutes played' })
+    .locator('..')
+    .getByRole('table');
+  // Player 1 was on the whole match — should appear in the minutes table.
+  await expect(minutesTable.getByRole('cell', { name: 'E2E Player 1', exact: true })).toBeVisible();
   // Player 11 was subbed off, Player 12 came on — both should appear too.
-  await expect(page.getByRole('cell', { name: 'E2E Player 11', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'E2E Player 12', exact: true })).toBeVisible();
+  await expect(
+    minutesTable.getByRole('cell', { name: 'E2E Player 11', exact: true }),
+  ).toBeVisible();
+  await expect(
+    minutesTable.getByRole('cell', { name: 'E2E Player 12', exact: true }),
+  ).toBeVisible();
+
+  // ── Box score appears (only for finished matches) ───────────────────
+  await expect(page.getByRole('heading', { name: 'Box score' })).toBeVisible();
+  // Team totals table: home team's "Goals" row should show 1; opponent 0.
+  const goalsRow = page.getByRole('row').filter({ hasText: /^Goals/ });
+  await expect(goalsRow).toContainText('1');
+  await expect(goalsRow).toContainText('0');
 });
