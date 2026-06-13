@@ -104,6 +104,10 @@ services:
       # Trust the gateway as the only X-Forwarded-* source. Auth.js v5 reads
       # this to detect the public origin when behind the proxy.
       AUTH_TRUST_HOST: 'true'
+      # Opt-in demo data. When true, the entrypoint provisions the
+      # demo@touchline.local account and seeds 6 teams and 10 finished
+      # matches after migrations. Idempotent.
+      SEED_DEMO: ${SEED_DEMO:-false}
     # No host port mapping — clients reach the app via the gateway.
     healthcheck:
       test: ['CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:3000/api/health']

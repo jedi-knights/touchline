@@ -21,5 +21,13 @@ node "$TSX" ./src/db/migrate.ts
 echo "[touchline] running soccer seed"
 node "$TSX" ./src/db/seed.ts
 
+# Demo data is opt-in. Set SEED_DEMO=true in .env to provision the
+# demo@touchline.local account plus 6 teams and 10 finished matches.
+# Idempotent — re-running with the demo user already populated is a no-op.
+if [ "${SEED_DEMO:-false}" = "true" ]; then
+  echo "[touchline] running demo seed (SEED_DEMO=true)"
+  node "$TSX" ./src/db/seed-demo.ts
+fi
+
 echo "[touchline] starting server"
 exec "$@"
