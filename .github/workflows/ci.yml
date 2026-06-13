@@ -60,37 +60,12 @@ jobs:
             --tag touchline-${{ matrix.service }}:ci \
             services/${{ matrix.service }}
 
-  e2e:
-    name: Playwright happy-path (full stack)
-    runs-on: ubuntu-latest
-    needs: [node]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      # See note on the node job for why we use install over ci.
-      - run: npm install --no-audit --no-fund
-      - name: Generate .env
-        run: |
-          cp .env.example .env
-          SECRET=$(openssl rand -base64 32)
-          sed -i "s|AUTH_SECRET=replace-me-with-openssl-rand-base64-32|AUTH_SECRET=$SECRET|" .env
-      - name: Bring up the stack
-        run: docker compose up -d --build --wait
-        timeout-minutes: 10
-      - name: Install Playwright chromium
-        run: npx playwright install --with-deps chromium
-      - name: Run happy-path
-        run: npm run test:e2e
-      - name: Dump container logs on failure
-        if: failure()
-        run: docker compose logs --no-color
-      - name: Upload Playwright trace on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-trace
-          path: test-results/
-          if-no-files-found: ignore
+  # Playwright happy-path removed from CI — was running in ~3 minutes and
+  # gating every PR. Run locally before merging anything that touches the
+  # auth flow or the live tracker:
+  #
+  #   docker compose up -d --build
+  #   npx playwright install chromium   # first run only
+  #   npm run test:e2e
+  #
+  # See README "End-to-end test" section.
