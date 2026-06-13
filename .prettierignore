@@ -4,5 +4,6 @@ dist
 playwright-report
 test-results
 src/db/migrations
-# Vendored upstream — never reformat these. See services/identity/VENDORED.md.
+# Vendored upstream — never reformat these. See the VENDORED.md in each.
 services/identity
+services/gateway
