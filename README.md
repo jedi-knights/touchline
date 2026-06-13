@@ -92,6 +92,20 @@ docker compose up --build
 # Healthcheck: http://localhost:3000/api/health
 ```
 
+### Demo data
+
+To stand up a populated account for demos, set `SEED_DEMO=true` in `.env` before `docker compose up`. The app entrypoint will, after migrations, create a fixed account and a known fixture:
+
+| Email                  | Password   |
+| ---------------------- | ---------- |
+| `demo@touchline.local` | `demo1234` |
+
+The fixture is **6 teams** (16–22 players each) and **10 finished matches** with full event timelines (kickoff → half time → second half → full time, with goals, cards, and 1–3 substitutions) plus the matching `player_stints`. Open any match under `/matches/[id]` to see the timeline and minutes-played table render against real data, with zero in-app tap-tap.
+
+The seed is **idempotent**: it skips when the demo user already owns teams, so re-running compose is safe.
+
+To get back to a clean stack, `docker compose down -v` (drops the volume), then start again.
+
 Adminer (DB inspector) is opt-in:
 
 ```bash
