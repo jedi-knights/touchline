@@ -1,0 +1,61 @@
+# Touchline local stack.
+#
+# Postgres is included from Phase 0 so the compose contract is stable across
+# the build. The app does not connect to it yet — wiring lands in Phase 1.
+#
+# Adminer is opt-in via the `tools` profile:
+#   docker compose --profile tools up
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-touchline}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-touchline}
+      POSTGRES_DB: ${POSTGRES_DB:-touchline}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-touchline}:${POSTGRES_PASSWORD:-touchline}@postgres:5432/${POSTGRES_DB:-touchline}
+      AUTH_SECRET: ${AUTH_SECRET:-please-change-me-in-env}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+    ports:
+      - '${APP_PORT:-3000}:3000'
+    healthcheck:
+      test: ['CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:3000/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  adminer:
+    image: adminer:4
+    profiles: ['tools']
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - '${ADMINER_PORT:-8080}:8080'
+
+volumes:
+  postgres_data:
