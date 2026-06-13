@@ -1,5 +1,7 @@
 # Touchline
 
+[![CI](https://github.com/jedi-knights/touchline/actions/workflows/ci.yml/badge.svg)](https://github.com/jedi-knights/touchline/actions/workflows/ci.yml)
+
 Touch-driven, sport-agnostic live tracker for match events. The first sport is soccer; the domain model, schema, and UI are designed so adding a new sport is data (seed rows), not code.
 
 ## Status
