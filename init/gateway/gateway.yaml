@@ -1,0 +1,99 @@
+# api-gateway configuration for touchline.
+#
+# All values may be overridden by GATEWAY_-prefixed environment variables;
+# underscores separate nested keys (e.g. GATEWAY_RATE_LIMIT_REQUESTS_PER_SECOND).
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  drain_timeout_secs: 5
+
+log:
+  level: "info"
+  format: "json"
+  environment: "development"
+
+# Authentication is OFF: Auth.js v5 cookies handle session validation
+# inside the Next.js app. Gateway-level JWT would double-gate /sign-in
+# and reject the Credentials flow on first hit.
+auth:
+  enabled: false
+  type: "hs256"
+  signing_key: ""
+
+# CORS is OFF: the browser, the gateway, and the Next.js app all live on
+# the same origin (host:3000), so no Access-Control-Allow-Origin header
+# is needed. Re-enable here if a future SPA on a different origin starts
+# calling these endpoints.
+cors:
+  allowed_origins: []
+
+# Rate limiting is ON. Primary reason this gateway is in the stack.
+# Token-bucket keyed by source IP. Behind a real load balancer or
+# Cloudflare in production, switch key_source to "x-forwarded-for".
+#
+# 100 rps with a burst of 200 is generous for a single-coach sideline
+# tablet (~3 taps/sec under heavy use) but protects against a runaway
+# script or credential-stuffing attempt.
+rate_limit:
+  enabled: true
+  strategy: "token_bucket"
+  key_source: "ip"
+  requests_per_second: 100
+  burst_size: 200
+
+# Circuit breaker is OFF — one upstream, and failures show up immediately
+# in healthchecks. Re-enable when the gateway fronts multiple services
+# whose failure modes can mask each other.
+circuit_breaker:
+  enabled: false
+
+# Tracing is OFF — no OTel collector configured. Enable per environment
+# by setting GATEWAY_TRACING_ENABLED=true and GATEWAY_TRACING_OTLP_ENDPOINT.
+tracing:
+  enabled: false
+  service_name: "touchline-gateway"
+  exporter: "stdout"
+
+ip_filter:
+  enabled: false
+
+# Compression is OFF.
+#
+# Known upstream bug observed against identity-platform-go @ 4886590:
+# the compression middleware gzip-encodes the body but omits the
+# Content-Encoding: gzip response header. Browsers receive raw gzip
+# bytes labelled text/html and render garbage; Playwright's happy-path
+# fails because no form fields are visible to hydrate.
+#
+# Re-enable once the gateway sets the Content-Encoding header (and
+# clears Content-Length when streaming). Until then, Next.js's own
+# default compression is sufficient for touchline.
+compression:
+  enabled: false
+  min_size_bytes: 1024
+  level: 6
+
+# Response cache is OFF — Next.js sets the cache headers it wants, and
+# touchline's data is highly user-scoped (a cached /matches response
+# leaking across users would be a tenant-isolation bug).
+cache:
+  enabled: false
+
+# Retry is OFF — the Next.js app is the only upstream; failures should
+# surface to the client.
+retry:
+  enabled: false
+
+# Single catch-all route: every path goes to the Next.js app. The system
+# endpoints /health, /ready, /metrics, /swagger are served by the gateway
+# itself before the proxy chain — they don't need a route definition and
+# they bypass auth + rate limit.
+routes:
+  - name: "touchline-app"
+    match:
+      path_prefix: "/"
+    upstream:
+      url: "http://app:3000"
+      strip_prefix: ""
+      timeout_secs: 30
