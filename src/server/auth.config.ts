@@ -8,7 +8,19 @@
  */
 import type { NextAuthConfig } from 'next-auth';
 
-const PUBLIC_PATHS = new Set<string>(['/sign-in', '/sign-up']);
+const PUBLIC_PATHS = new Set<string>([
+  '/sign-in',
+  '/sign-up',
+  // PWA manifest + browser-fetched icons must be reachable unauthenticated
+  // — the OS pulls them when the user adds the app to their home screen,
+  // and browsers pull the favicon on every tab load.
+  '/manifest.webmanifest',
+  '/icon',
+  '/icon1',
+  '/icon2',
+  '/icon3',
+  '/apple-icon',
+]);
 const PUBLIC_PREFIXES = ['/api/auth/']; // Auth.js handler
 const PUBLIC_API_EXACT = new Set<string>(['/api/health']);
 

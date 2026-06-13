@@ -17,4 +17,17 @@ body {
   color: rgb(var(--foreground));
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+
+  /* Honour the iPhone notch / Android cutout when installed as a PWA in
+     standalone mode. `viewportFit: cover` in the root layout lets the body
+     paint behind the cutouts; these paddings then keep content visible. */
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+
+  /* iOS standalone-mode bounce-scroll can re-enter the address bar even
+     when the app should feel chrome-less. Disable overscroll on body so
+     the sideline feels like an app, not a web page. */
+  overscroll-behavior-y: none;
 }
