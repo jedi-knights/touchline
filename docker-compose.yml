@@ -1,9 +1,13 @@
 # Touchline local stack.
 #
-# Three long-running services:
+# Request path:  browser → gateway:8080 → app:3000 (internal)
+#                                       → server actions call identity-service:8081 (internal)
+#
+# Long-running services:
 #   - postgres:         shared by touchline and identity-service (separate DBs)
 #   - identity-service: credential validation for the Next.js app
-#   - app:              the Next.js app itself
+#   - app:              the Next.js app itself (internal-only; reached via gateway)
+#   - gateway:          api-gateway front-door — rate limit + compression
 #
 # Adminer is opt-in via the `tools` profile:
 #   docker compose --profile tools up
@@ -18,8 +22,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-touchline}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Init scripts run only on first start (empty data dir). They create
-      # the identity_service database alongside the default touchline one.
       - ./init/postgres:/docker-entrypoint-initdb.d:ro
     ports:
       - '${POSTGRES_PORT:-5432}:5432'
@@ -47,10 +49,8 @@ services:
       IDENTITY_LOG_LEVEL: ${IDENTITY_LOG_LEVEL:-info}
       IDENTITY_LOG_FORMAT: json
       IDENTITY_LOG_ENVIRONMENT: ${IDENTITY_LOG_ENVIRONMENT:-development}
-    ports:
-      # Bind to the host on a non-default port so it doesn't collide with a
-      # local Go service. Internal cluster talks to it via the service name.
-      - '${IDENTITY_PORT:-8081}:8081'
+    # No host port mapping — only the Next.js app calls in over the docker
+    # network. Browsers should never reach this service directly.
     healthcheck:
       test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://127.0.0.1:8081/health']
       interval: 5s
@@ -74,14 +74,53 @@ services:
       IDENTITY_SERVICE_URL: http://identity-service:8081
       AUTH_SECRET: ${AUTH_SECRET:-please-change-me-in-env}
       AUTH_URL: ${AUTH_URL:-http://localhost:3000}
-    ports:
-      - '${APP_PORT:-3000}:3000'
+      # Trust the gateway as the only X-Forwarded-* source. Auth.js v5 reads
+      # this to detect the public origin when behind the proxy.
+      AUTH_TRUST_HOST: 'true'
+    # No host port mapping — clients reach the app via the gateway.
     healthcheck:
       test: ['CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:3000/api/health']
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  gateway:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: api-gateway
+    # The image's ENTRYPOINT is the binary; the `serve` subcommand starts
+    # the HTTP server. Without it the binary prints help and exits.
+    command: ['serve']
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      GATEWAY_LOG_LEVEL: ${GATEWAY_LOG_LEVEL:-info}
+      GATEWAY_LOG_ENVIRONMENT: ${GATEWAY_LOG_ENVIRONMENT:-development}
+    working_dir: /app
+    volumes:
+      # Mount the touchline-tuned config read-only at the binary's working
+      # directory. The gateway searches ./gateway.yaml first.
+      - ./init/gateway/gateway.yaml:/app/gateway.yaml:ro
+    ports:
+      - '${APP_PORT:-3000}:8080'
+    healthcheck:
+      # /ready is the local-state-only probe — passes once the proxy chain
+      # is wired up. /health does upstream aggregation which would return
+      # 503 against touchline's "/" because the unauthenticated root path
+      # returns a 307 to /sign-in, not a 200 OK. The Next.js app's own
+      # /api/health is the real per-upstream gate (and `app` already
+      # depends on it).
+      test:
+        ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://127.0.0.1:8080/ready']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   adminer:
     image: adminer:4
