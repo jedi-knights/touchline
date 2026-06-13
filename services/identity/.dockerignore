@@ -1,0 +1,10 @@
+# Build context limits for `docker build services/identity`.
+# The Dockerfile COPYs go.work + libs/ + services/ only; nothing else is needed.
+
+# Markdown is for humans, not the build.
+**/*.md
+**/CLAUDE.md
+
+# Vendored test fixtures and locally cached test artifacts.
+**/testdata
+**/.cache
