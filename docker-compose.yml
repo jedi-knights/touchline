@@ -20,6 +20,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-touchline}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-touchline}
       POSTGRES_DB: ${POSTGRES_DB:-touchline}
+      # postgres:16-alpine ships without glibc locales; pin initdb to the
+      # always-available C locale to silence "no usable system locales were found".
+      POSTGRES_INITDB_ARGS: --locale=C
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init/postgres:/docker-entrypoint-initdb.d:ro
