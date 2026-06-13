@@ -1,0 +1,11 @@
+go 1.26
+
+// Trimmed to the modules required to build identity-service. Other
+// services (auth-server, api-gateway, etc.) from the upstream monorepo
+// are intentionally not vendored — see VENDORED.md.
+use (
+	./libs/errors
+	./libs/httputil
+	./libs/logging
+	./services/identity-service
+)

@@ -4,22 +4,22 @@
 # underscores separate nested keys (e.g. GATEWAY_RATE_LIMIT_REQUESTS_PER_SECOND).
 
 server:
-  host: "0.0.0.0"
+  host: '0.0.0.0'
   port: 8080
   drain_timeout_secs: 5
 
 log:
-  level: "info"
-  format: "json"
-  environment: "development"
+  level: 'info'
+  format: 'json'
+  environment: 'development'
 
 # Authentication is OFF: Auth.js v5 cookies handle session validation
 # inside the Next.js app. Gateway-level JWT would double-gate /sign-in
 # and reject the Credentials flow on first hit.
 auth:
   enabled: false
-  type: "hs256"
-  signing_key: ""
+  type: 'hs256'
+  signing_key: ''
 
 # CORS is OFF: the browser, the gateway, and the Next.js app all live on
 # the same origin (host:3000), so no Access-Control-Allow-Origin header
@@ -37,8 +37,8 @@ cors:
 # script or credential-stuffing attempt.
 rate_limit:
   enabled: true
-  strategy: "token_bucket"
-  key_source: "ip"
+  strategy: 'token_bucket'
+  key_source: 'ip'
   requests_per_second: 100
   burst_size: 200
 
@@ -52,8 +52,8 @@ circuit_breaker:
 # by setting GATEWAY_TRACING_ENABLED=true and GATEWAY_TRACING_OTLP_ENDPOINT.
 tracing:
   enabled: false
-  service_name: "touchline-gateway"
-  exporter: "stdout"
+  service_name: 'touchline-gateway'
+  exporter: 'stdout'
 
 ip_filter:
   enabled: false
@@ -90,10 +90,10 @@ retry:
 # itself before the proxy chain — they don't need a route definition and
 # they bypass auth + rate limit.
 routes:
-  - name: "touchline-app"
+  - name: 'touchline-app'
     match:
-      path_prefix: "/"
+      path_prefix: '/'
     upstream:
-      url: "http://app:3000"
-      strip_prefix: ""
+      url: 'http://app:3000'
+      strip_prefix: ''
       timeout_secs: 30

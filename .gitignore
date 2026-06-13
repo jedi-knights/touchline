@@ -165,9 +165,11 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
-go.work
-go.work.sum
+# Go workspace file — root only. The vendored services under
+# services/*/ ship their own go.work + go.work.sum which MUST be
+# committed; without them docker build can't resolve the workspace.
+/go.work
+/go.work.sum
 
 # env file
 .env

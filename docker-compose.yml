@@ -115,8 +115,7 @@ services:
       # returns a 307 to /sign-in, not a 200 OK. The Next.js app's own
       # /api/health is the real per-upstream gate (and `app` already
       # depends on it).
-      test:
-        ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://127.0.0.1:8080/ready']
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://127.0.0.1:8080/ready']
       interval: 10s
       timeout: 5s
       retries: 5

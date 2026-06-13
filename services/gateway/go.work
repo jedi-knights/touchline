@@ -1,0 +1,13 @@
+go 1.26
+
+// Trimmed to the modules required to build api-gateway. Other services
+// (identity-service, auth-server, etc.) from the upstream monorepo are
+// intentionally not vendored — see VENDORED.md.
+use (
+	./libs/errors
+	./libs/httputil
+	./libs/jwtutil
+	./libs/logging
+	./libs/testutil
+	./services/api-gateway
+)
