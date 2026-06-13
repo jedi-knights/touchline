@@ -33,11 +33,30 @@ Sub(#11 off, #12 on) → Half Time → Second Half → Full Time → /matches/[i
 4. **Multi-tenant from day one.** Every read and write is scoped to the authenticated user. There is no path to another user's data.
 5. **Every event is persisted.** Each tap that records something writes an immutable row with wall-clock time, derived match-clock seconds, period, and any player references.
 
+## Architecture
+
+Touchline runs four long-running services behind a single host port:
+
+```
+browser → gateway:8080 (host :3000, rate-limited)
+              → app:3000 (Next.js, internal)
+                  ├→ identity-service:8081 (credential validation, internal)
+                  └→ postgres:5432 (touchline + identity_service DBs, internal)
+```
+
+Two Go services from [identity-platform-go][platform] are **vendored** under `services/`:
+
+- **identity-service** (`services/identity/`) — owns user records and bcrypt password hashes; the Next.js Auth.js Credentials provider calls it on sign-in / sign-up.
+- **api-gateway** (`services/gateway/`) — front-door reverse proxy. Today it enforces **rate limiting** (token bucket, 100 rps / burst 200, keyed by source IP). Auth, CORS, compression, retry, cache, and circuit-break are all off on purpose — see `init/gateway/gateway.yaml` for the rationale per setting.
+
+[platform]: https://github.com/jedi-knights/identity-platform-go
+
 ## Tech stack
 
 - **Next.js 15** (App Router) + **TypeScript** (`strict`, `noUncheckedIndexedAccess`)
 - **PostgreSQL 16** + **Drizzle ORM** / `drizzle-kit`
-- **Auth.js v5** (credentials, JWT sessions — see [auth notes](#auth-sessions))
+- **Auth.js v5** in front of an **identity-service** for credentials (see [auth notes](#auth-sessions))
+- **api-gateway** for rate limiting + future cross-cutting policies
 - **Tailwind CSS** (touch-first; 48px minimum tap targets)
 - **Zod** for shared client/server validation
 - **Vitest** for domain unit tests; **Playwright** for one happy-path E2E
@@ -184,9 +203,24 @@ Soccer is implemented entirely as **data**: one `sports` row (`slug='soccer'`, `
 
 The live tracker UI renders dynamic buttons from these rows. The substitution flow finds its event_type by **flag**, not by code, so a hockey "Line Change" just works.
 
-### <a id="auth-sessions"></a>Auth: why JWT, not database sessions
+### <a id="auth-sessions"></a>Auth: Auth.js cookies in front of identity-service
 
-The brief asked for database sessions. In Auth.js v5 the Credentials provider deliberately short-circuits the OAuth `createUser → linkAccount → createSession` lifecycle that the adapter expects, so DB sessions with credentials need an unsupported workaround. The Drizzle adapter is still wired up (so user, account, session, and verification-token tables remain the source of truth for identity), and the session strategy is JWT. When an OAuth provider is added later, OAuth flows can run with database sessions while credentials stay on JWT. Documented in `src/server/auth.ts`.
+The Auth.js v5 **Credentials provider** in `src/server/auth.ts` calls into the vendored **identity-service** for credential validation (`POST /auth/login`), then wraps the returned `user_id` in a JWT session cookie. Sign-up does the same against `POST /auth/register`. The local `users` table is a thin mirror — `id, email, name, created_at`, no password column. Source of truth for the bcrypt hash lives in `identity_service.users`.
+
+Why JWT sessions and not DB sessions: in Auth.js v5 the Credentials provider deliberately short-circuits the OAuth `createUser → linkAccount → createSession` lifecycle the adapter expects, so DB sessions with credentials need an unsupported workaround. JWT keeps the session-cookie layer working today; when an OAuth provider is added later, OAuth flows can run with database sessions while credentials stay on JWT.
+
+### <a id="gateway"></a>Front door: api-gateway
+
+The `gateway` service (vendored under `services/gateway/`) is the only host-exposed port. All browser traffic lands on it; everything behind (`app`, `identity-service`, `postgres`) lives on the docker bridge with no external listener. The default `init/gateway/gateway.yaml` is touchline-tuned:
+
+- **Rate limiting on** — token bucket, 100 rps / burst 200, keyed by source IP. This is the headline feature; it closes the OWASP A06 rate-limiting gap on `/sign-in`, `/sign-up`, and `/api/auth/*`.
+- **Auth off** — Auth.js cookies handle session validation inside the app.
+- **CORS off** — browser, gateway, and app share an origin.
+- **Compression off** — Next.js already gzips its own responses with the correct `Content-Encoding` header. Enabling at the gateway double-compresses and breaks browsers; tracked as a known issue in `init/gateway/gateway.yaml`.
+- **Cache off** — user-scoped responses must not be shared across users.
+- **Single catch-all route** `/` → `http://app:3000`. The gateway's own `/health`, `/ready`, `/metrics`, `/swagger` are reserved before the proxy chain.
+
+Behind a real reverse proxy (Cloudflare, AWS ALB) in production, set `rate_limit.key_source: x-forwarded-for` so each user gets their own bucket rather than sharing the LB's IP.
 
 ### Security posture
 
@@ -194,10 +228,9 @@ OWASP-aware throughout:
 
 - **A01 Broken Access Control** — middleware is default-deny against an explicit allow-list (`/sign-in`, `/sign-up`, `/api/auth/*`, `/api/health`). Every read filters by `userId`; every write uses compound `WHERE id = ? AND user_id = ?` so cross-tenant writes silently affect zero rows. Cross-tenant reads return 404 (not 403) via `notFound()` to avoid existence disclosure.
 - **A05 Injection** — every server-action input goes through Zod before reaching the DB; Drizzle parameterizes all queries.
-- **A07 Auth Failures** — bcryptjs cost 12; sign-in/sign-up responses use a single generic message so users can't be enumerated; session token rotates on login and clears on sign-out.
+- **A06 Identification & Authentication Failures** — the api-gateway enforces a token-bucket rate limit (100 rps / burst 200) on all paths, including `/sign-in`, `/sign-up`, and `/api/auth/*`. See [Front door: api-gateway](#gateway).
+- **A07 Auth Failures** — bcrypt password hashes live in identity-service (not in the Next.js app); sign-in/sign-up responses use a single generic message so users can't be enumerated; session token rotates on login and clears on sign-out.
 - **A10 Mishandling of Exceptional Conditions** — every multi-row side effect (match start, substitution, match finish) runs inside `db.transaction` so a partial application (event without stints, or stints without event) is impossible.
-
-Rate limiting is the obvious next polish. The brief flags it for a later pass.
 
 ## Contributing
 
