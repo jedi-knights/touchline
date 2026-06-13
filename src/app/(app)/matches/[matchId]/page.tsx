@@ -1,11 +1,17 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { BoxScore } from '@/components/app/box-score';
 import { ConfirmForm } from '@/components/app/confirm-form';
 import { MinutesTable } from '@/components/app/minutes-table';
 import { TimelineSummary } from '@/components/app/timeline-summary';
 import { deleteMatchAction } from '@/server/actions/matches';
-import { getMatchLiveState, listStintsForMatch, listTimeline } from '@/server/queries/events';
+import {
+  getBoxScoreEvents,
+  getMatchLiveState,
+  listStintsForMatch,
+  listTimeline,
+} from '@/server/queries/events';
 import { getBenchForMatch, getLineupForMatch, type LineupEntry } from '@/server/queries/matches';
 import { requireUser } from '@/server/session';
 
@@ -40,11 +46,14 @@ export default async function MatchDetailPage({ params }: PageProps) {
   const match = await getMatchLiveState(matchId, user.id);
   if (!match) notFound();
 
-  const [lineup, bench, stints, timeline] = await Promise.all([
+  const [lineup, bench, stints, timeline, boxScoreEvents] = await Promise.all([
     getLineupForMatch(match.id),
     getBenchForMatch(match.id, match.team.id),
     listStintsForMatch(match.id),
     listTimeline(match.id),
+    // Skip the box-score query for matches that haven't started — there's
+    // nothing to aggregate and the page renders without the section anyway.
+    match.status === 'finished' ? getBoxScoreEvents(match.id) : Promise.resolve([]),
   ]);
 
   const status = STATUS_LABEL[match.status];
@@ -112,6 +121,17 @@ export default async function MatchDetailPage({ params }: PageProps) {
         <h2 className="mb-3 text-lg font-semibold">Minutes played</h2>
         <MinutesTable stints={stints} finalClockSeconds={finalClockSeconds} asOfLabel={asOfLabel} />
       </div>
+
+      {match.status === 'finished' ? (
+        <div>
+          <h2 className="mb-3 text-lg font-semibold">Box score</h2>
+          <BoxScore
+            events={boxScoreEvents}
+            homeTeamName={match.team.name}
+            opponentName={match.opponentName}
+          />
+        </div>
+      ) : null}
 
       <div className="grid gap-6 sm:grid-cols-2">
         <div>

@@ -265,6 +265,46 @@ export interface TimelineEvent {
   playerNumber: number | null;
 }
 
+export interface BoxScoreEventRow {
+  code: string;
+  side: 'home' | 'away' | null;
+  playerId: string | null;
+  playerName: string | null;
+  playerNumber: number | null;
+}
+
+/**
+ * Raw event rows for the box-score aggregator. Returns code + side + player
+ * attribution; the aggregation itself happens in `src/domain/box-score.ts`
+ * so the query is pure SQL → DTOs and the math is pure-fn → testable.
+ *
+ * Clock-control rows come back too — the aggregator skips them by code —
+ * because filtering at the SQL level would mean a second column dependency
+ * that the index can't help with. The list is bounded by events-per-match.
+ */
+export async function getBoxScoreEvents(matchId: string): Promise<BoxScoreEventRow[]> {
+  const rows = await db
+    .select({
+      code: eventTypes.code,
+      side: matchEvents.side,
+      playerId: matchEvents.playerId,
+      playerName: players.name,
+      playerNumber: players.number,
+    })
+    .from(matchEvents)
+    .innerJoin(eventTypes, eq(matchEvents.eventTypeId, eventTypes.id))
+    .leftJoin(players, eq(matchEvents.playerId, players.id))
+    .where(eq(matchEvents.matchId, matchId));
+
+  return rows.map((r) => ({
+    code: r.code,
+    side: r.side,
+    playerId: r.playerId,
+    playerName: r.playerName,
+    playerNumber: r.playerNumber,
+  }));
+}
+
 /** Newest-first match timeline for display. */
 export async function listTimeline(matchId: string): Promise<TimelineEvent[]> {
   const rows = await db
