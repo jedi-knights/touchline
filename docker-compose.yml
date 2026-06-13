@@ -71,8 +71,12 @@ services:
       MATCH_ENGINE_SERVER_HOST: 0.0.0.0
       MATCH_ENGINE_SERVER_PORT: 8082
       MATCH_ENGINE_LOG_LEVEL: ${MATCH_ENGINE_LOG_LEVEL:-info}
+    # /ready (not /health) is what gates `depends_on: service_healthy`.
+    # /ready pings the DB pool and answers 503 while the service is draining,
+    # which means the app container won't start until match-engine can
+    # actually round-trip to postgres — not just "the binary started."
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://127.0.0.1:8082/health']
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://127.0.0.1:8082/ready']
       interval: 5s
       timeout: 5s
       retries: 10
