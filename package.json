@@ -20,21 +20,19 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
+    "drizzle-orm": "^0.36.4",
     "next": "^15.1.0",
+    "next-auth": "5.0.0-beta.25",
+    "postgres": "^3.4.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "drizzle-orm": "^0.36.4",
-    "postgres": "^3.4.5",
-    "zod": "^3.23.8",
-    "next-auth": "5.0.0-beta.25",
-    "@auth/drizzle-adapter": "^1.7.4",
-    "bcryptjs": "^2.4.3",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.2.0",
     "@playwright/test": "^1.49.0",
-    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.9.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -42,7 +40,6 @@
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.28.1",
     "eslint": "^9.15.0",
-    "@eslint/eslintrc": "^3.2.0",
     "eslint-config-next": "^15.1.0",
     "postcss": "^8.4.49",
     "prettier": "^3.3.3",

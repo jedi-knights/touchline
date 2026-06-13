@@ -1,34 +1,30 @@
 /**
- * Full Auth.js v5 configuration with the Drizzle adapter and the credentials
- * provider. Runs in the Node.js runtime only.
+ * Full Auth.js v5 configuration. Runs in the Node.js runtime only.
  *
- * Session strategy: JWT. Auth.js v5's credentials provider does not compose
- * cleanly with database sessions — the adapter expects the OAuth-style
- * createUser/linkAccount/createSession lifecycle and credentials short-
- * circuits it. JWT keeps things working today; when an OAuth provider is
- * added we can revisit and switch to database sessions for OAuth flows.
- * The adapter is still wired up so user/account/session tables remain the
- * source of truth for identity.
+ * Architecture: Auth.js owns the session cookie; identity-service
+ * (vendored under services/identity) owns the user record and bcrypt
+ * password hash. The Credentials provider's `authorize` callback calls
+ * identity-service over HTTP; on success it mirrors the user row into
+ * touchline's local `users` table so FKs from teams/matches/etc. resolve.
+ *
+ * No DrizzleAdapter: Auth.js does not read or write user state. The local
+ * `users` table is a thin mirror, not the source of truth.
+ *
+ * Session strategy: JWT — matches the prior setup; nothing about session
+ * cookies changes when the credential check moves out-of-process.
  */
-import { DrizzleAdapter } from '@auth/drizzle-adapter';
-import bcrypt from 'bcryptjs';
-import { eq } from 'drizzle-orm';
 import NextAuth, { type DefaultSession } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { z } from 'zod';
 import { db } from '@/db/client';
-import { accounts, sessions, users, verificationTokens } from '@/db/schema';
+import { users } from '@/db/schema';
 import { authConfig } from './auth.config';
+import { identityLogin } from './identity-client';
 
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(200),
 });
-
-// AUTH_SECRET enforcement: Auth.js v5 surfaces a clear error at request time
-// when the secret is missing; we don't add a redundant import-time throw,
-// which would also break Next.js's build-time route metadata collection. The
-// Docker entrypoint should still set the variable in any real deployment.
 
 declare module 'next-auth' {
   interface Session {
@@ -40,12 +36,6 @@ declare module 'next-auth' {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
-  adapter: DrizzleAdapter(db, {
-    usersTable: users,
-    accountsTable: accounts,
-    sessionsTable: sessions,
-    verificationTokensTable: verificationTokens,
-  }),
   session: { strategy: 'jwt' },
   providers: [
     Credentials({
@@ -57,14 +47,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const parsed = credentialsSchema.safeParse(creds);
         if (!parsed.success) return null;
 
-        const { email, password } = parsed.data;
-        const [row] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-        if (!row?.passwordHash) return null;
+        // Delegate credential verification to identity-service.
+        const result = await identityLogin(parsed.data);
+        if (!result.ok) return null;
 
-        const ok = await bcrypt.compare(password, row.passwordHash);
-        if (!ok) return null;
+        const { user_id, email, name } = result.user;
 
-        return { id: row.id, email: row.email, name: row.name };
+        // Idempotent mirror so FKs resolve. `onConflictDoNothing` keeps this
+        // safe to run on every sign-in even though sign-up writes the row
+        // first; in steady state this is a no-op.
+        await db
+          .insert(users)
+          .values({ id: user_id, email, name: name.length > 0 ? name : null })
+          .onConflictDoNothing({ target: users.id });
+
+        return { id: user_id, email, name };
       },
     }),
   ],

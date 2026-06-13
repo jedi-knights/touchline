@@ -1,60 +1,24 @@
 /**
- * Auth.js v5 tables (drizzle-adapter compatible) + a `passwordHash` column on
- * `users` for the credentials provider. Column types match the upstream adapter
- * example so the adapter resolves them without further mapping.
+ * Local mirror of user identity. The source of truth lives in
+ * identity-service (vendored at services/identity); this table is just
+ * thin enough to satisfy FKs from teams.user_id and matches.user_id and
+ * to render the user's name/email in the UI. It never stores a password.
+ *
+ * The `id` column intentionally has no default — it is populated from
+ * identity-service's `user_id` on register and re-affirmed on every login
+ * via the upsert in `src/server/auth.ts`.
+ *
+ * Auth.js v5 used to require a DrizzleAdapter with `accounts`, `sessions`,
+ * and `verification_tokens` tables here; with credentials delegated to
+ * identity-service the adapter is gone and those tables were dropped in
+ * migration 0002. If a future OAuth provider is added, Auth.js will need
+ * either its own tables or a different storage strategy then.
  */
-import { pgTable, primaryKey, text, timestamp, integer } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  name: text('name'),
+  id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
-  emailVerified: timestamp('email_verified', { mode: 'date', withTimezone: true }),
-  image: text('image'),
-  passwordHash: text('password_hash'),
+  name: text('name'),
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).notNull().defaultNow(),
 });
-
-export const accounts = pgTable(
-  'accounts',
-  {
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    type: text('type').notNull(),
-    provider: text('provider').notNull(),
-    providerAccountId: text('provider_account_id').notNull(),
-    refresh_token: text('refresh_token'),
-    access_token: text('access_token'),
-    expires_at: integer('expires_at'),
-    token_type: text('token_type'),
-    scope: text('scope'),
-    id_token: text('id_token'),
-    session_state: text('session_state'),
-  },
-  (t) => ({
-    pk: primaryKey({ columns: [t.provider, t.providerAccountId] }),
-  }),
-);
-
-export const sessions = pgTable('sessions', {
-  sessionToken: text('session_token').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  expires: timestamp('expires', { mode: 'date', withTimezone: true }).notNull(),
-});
-
-export const verificationTokens = pgTable(
-  'verification_tokens',
-  {
-    identifier: text('identifier').notNull(),
-    token: text('token').notNull(),
-    expires: timestamp('expires', { mode: 'date', withTimezone: true }).notNull(),
-  },
-  (t) => ({
-    pk: primaryKey({ columns: [t.identifier, t.token] }),
-  }),
-);

@@ -15,6 +15,13 @@
       "when": 1781335245185,
       "tag": "0001_lineup",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781340898814,
+      "tag": "0002_identity_cutover",
+      "breakpoints": true
     }
   ]
 }
