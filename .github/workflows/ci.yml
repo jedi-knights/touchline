@@ -20,7 +20,12 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
+      # `npm install` rather than `npm ci` because the lockfile is generated on
+      # darwin-arm64 and would need linux-x64 optional binaries (sharp, swc,
+      # @emnapi/*) baked in. `install` resolves the host-platform set without
+      # complaining; the lockfile is still authoritative for the touchline
+      # source-of-truth deps.
+      - run: npm install --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check
@@ -45,13 +50,14 @@ jobs:
             build_arg: api-gateway
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
       - name: Build services/${{ matrix.service }} → ${{ matrix.build_arg }}
+        # Plain `docker build` (no buildx setup): the CI runner already has
+        # docker installed, and buildx's BuildKit + --load combo was failing
+        # to see go.work in the build context.
         run: |
-          docker buildx build \
+          docker build \
             --build-arg SERVICE_NAME=${{ matrix.build_arg }} \
             --tag touchline-${{ matrix.service }}:ci \
-            --load \
             services/${{ matrix.service }}
 
   e2e:
