@@ -4,9 +4,12 @@
 //
 //   POST  /matches/{match_id}/events
 //   POST  /matches/{match_id}/substitutions
-//   GET   /health
+//   GET   /health   (liveness — process up, not draining)
+//   GET   /ready    (readiness — DB pingable, not draining)
 //
 // Errors are mapped from the domain sentinel values to HTTP status codes.
+// Probes are implemented separately in probes.go so the readiness path
+// can fail independently of the engine.
 package httpserver
 
 import (
@@ -30,13 +33,14 @@ func NewHandler(engine ports.MatchEngine, logger *slog.Logger) *Handler {
 	return &Handler{engine: engine, logger: logger}
 }
 
-// NewRouter wires the handler onto a stdlib mux. Method+path syntax requires
-// Go 1.22+.
-func NewRouter(h *Handler, _ *slog.Logger) http.Handler {
+// NewRouter wires the handler + probes onto a stdlib mux. Method+path
+// syntax requires Go 1.22+.
+func NewRouter(h *Handler, probes *Probes, _ *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /matches/{match_id}/events", h.RecordEvent)
 	mux.HandleFunc("POST /matches/{match_id}/substitutions", h.RecordSubstitution)
-	mux.HandleFunc("GET /health", h.Health)
+	mux.HandleFunc("GET /health", probes.Live)
+	mux.HandleFunc("GET /ready", probes.Ready)
 	return mux
 }
 
@@ -129,10 +133,6 @@ func (h *Handler) RecordSubstitution(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toMatchResponse(match))
-}
-
-func (h *Handler) Health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // --- helpers ---

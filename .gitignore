@@ -181,6 +181,9 @@ profile.cov
 # Local task tracking (per CLAUDE.md)
 TODO.md
 
+# Claude Code local state (worktrees, schedule locks, plans)
+.claude/
+
 # Playwright
 /test-results/
 /playwright-report/

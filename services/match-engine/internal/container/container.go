@@ -14,6 +14,7 @@ import (
 
 type Container struct {
 	Handler *httpadapter.Handler
+	Probes  *httpadapter.Probes
 	closer  func()
 }
 
@@ -31,8 +32,11 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*Contain
 	repo := postgres.NewMatchRepository(pool)
 	svc := application.NewMatchService(repo)
 	handler := httpadapter.NewHandler(svc, logger)
+	// pgxpool.Pool.Ping satisfies httpserver.Pinger directly.
+	probes := httpadapter.NewProbes(pool)
 	return &Container{
 		Handler: handler,
+		Probes:  probes,
 		closer:  pool.Close,
 	}, nil
 }

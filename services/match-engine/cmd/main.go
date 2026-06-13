@@ -42,13 +42,17 @@ func run() error {
 	}
 	defer c.Close()
 
-	handler := httpserver.NewRouter(c.Handler, logger)
+	handler := httpserver.NewRouter(c.Handler, c.Probes, logger)
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+
+	// Mark ready as soon as the container is wired — pool.Ping was already
+	// verified in container.New, so /ready will answer 200 immediately.
+	c.Probes.SetReady(true)
 
 	// Run the listener in a goroutine so the main thread can wait for signals.
 	errCh := make(chan error, 1)
@@ -69,6 +73,13 @@ func run() error {
 		logger.Info("shutting down", "signal", sig.String())
 	}
 
+	// Two-phase shutdown: flip the readiness flag first so the LB stops
+	// sending new requests, sleep the drain window so in-flight requests
+	// finish, then close the listener.
+	c.Probes.SetReady(false)
+	logger.Info("draining", "duration", drainDuration.String())
+	time.Sleep(drainDuration)
+
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -76,3 +87,9 @@ func run() error {
 	}
 	return nil
 }
+
+// drainDuration is the gap between SIGTERM and srv.Shutdown. It must exceed
+// the worst-case LB poll interval (k8s default ~10s, compose healthcheck
+// interval is 5s) plus the longest realistic handler. 5s is enough for
+// compose; raise via env if running behind a slower LB.
+const drainDuration = 5 * time.Second
