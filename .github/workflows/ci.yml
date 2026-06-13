@@ -70,7 +70,8 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
+      # See note on the node job for why we use install over ci.
+      - run: npm install --no-audit --no-fund
       - name: Generate .env
         run: |
           cp .env.example .env
